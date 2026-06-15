@@ -1,0 +1,97 @@
+# Post-Mortem Generation Prompt
+# Used by Claude Sonnet 4.6 to analyze slipped deals
+
+SYSTEM_PROMPT = """
+You are a RevOps AI analyst specializing in B2B SaaS sales diagnostics.
+Your job is to analyze slipped forecast deals and generate structured post-mortems
+for sales leadership. Be direct, specific, and actionable. Avoid vague language.
+Always cite specific signals from the data provided.
+"""
+
+USER_PROMPT_TEMPLATE = """
+Analyze this slipped deal and generate a structured post-mortem.
+
+## DEAL DATA
+- Account: {account_name}
+- AE: {ae_name}
+- ARR: ${arr}
+- Original Close Date: {original_close_date}
+- Stage at Slip: {stage_name}
+
+## SPICED NOTES (from Salesforce)
+- Situation: {spiced_situation}
+- Pain: {spiced_pain}
+- Impact: {spiced_impact}
+- Critical Event: {spiced_critical_event}
+- Decision Process: {spiced_decision}
+- Economic Buyer: {economic_buyer}
+- Champion: {champion}
+- Mutual Close Plan: {mutual_close_plan}
+- Last Activity Date: {last_activity_date}
+
+## CALL DATA (from Attention)
+{call_summaries}
+
+## TASK
+Generate a post-mortem with these exact fields:
+
+1. WHAT THE REP BELIEVED
+   Based on SPICED notes and last forecast call — what was the rep's rationale for committing this deal?
+
+2. WHAT THE SIGNALS ACTUALLY SHOWED
+   Based on call data, last activity date, and SPICED gaps — what was really happening?
+
+3. ROOT CAUSE HYPOTHESIS
+   Choose ONE primary root cause from this taxonomy:
+   - No true Critical Event (deadline was internal/rep-driven, not buyer-confirmed)
+   - Champion not mobilized (champion disengaged or not senior enough)
+   - No economic buyer access (decision maker never in the process)
+   - Scope/pricing not aligned (proposal didn't match buyer's budget or needs)
+   - Internal blocker not surfaced (legal, IT, procurement obstacle not identified)
+   - Competition not fully qualified (competitive threat underestimated)
+   - Rep-driven push (sandbagging vs. real slip — deal was never real at this date)
+
+4. RISK REP MISSED
+   Specific SPICED gaps OR call signals that foreshadowed this outcome.
+   Be specific: cite dates, quotes from transcripts, missing fields.
+
+5. RECOMMENDED ACTION
+   One clear action for leadership to take with this deal in the new month.
+   Format: [Who] should [do what] by [when] to [achieve what outcome].
+
+6. MANAGED PUSH FLAG
+   true/false — Was this legitimately pushed by the customer with documented agreement?
+   If true, briefly explain why this should be excluded from slip analysis.
+
+Respond in JSON format only. No preamble.
+"""
+
+# Root cause taxonomy for reference
+ROOT_CAUSE_OPTIONS = [
+    "No true Critical Event",
+    "Champion not mobilized",
+    "No economic buyer access",
+    "Scope/pricing not aligned",
+    "Internal blocker not surfaced",
+    "Competition not fully qualified",
+    "Rep-driven push"
+]
+
+# SPICED risk signals to flag automatically
+SPICED_RISK_FLAGS = [
+    "No named Economic Buyer or Champion",
+    "Critical Event described as vague (e.g., end of quarter) with no external forcing function",
+    "No mutual close plan or next steps documented",
+    "Impact/Pain not tied to a quantified business outcome",
+    "Decision criteria not captured or one-sided"
+]
+
+# Call data risk signals
+CALL_RISK_FLAGS = [
+    "Last call more than 14 days before month-end",
+    "Rep commitments not followed up",
+    "Executive disengagement detected",
+    "Buyer hesitation or objections not addressed",
+    "Scope creep introduced without pricing discussion",
+    "No next meeting scheduled after last call"
+]
