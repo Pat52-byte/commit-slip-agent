@@ -1,0 +1,56 @@
+{
+  "report_month": "May 2024",
+  "generated_at": "2024-06-01T06:45:00Z",
+  "delivered_to": "Hassan (Slack DM)",
+  "next_forecast_meeting": "Tuesday, June 4 @ 9:00am",
+  "summary": {
+    "total_commit_deals": 18,
+    "slipped_deals": 3,
+    "slip_rate": "16.7%",
+    "slip_rate_vs_target": "above target (target: <15%)",
+    "total_arr_at_risk": 437000,
+    "deals_with_spiced_gaps": 2,
+    "deals_with_no_call_last_14_days": 2,
+    "managed_push_excluded": 1
+  },
+  "slack_message": "📋 *Commit Slip Report — May 2024*\n3 deals committed to close in May did not close. Here's the post-mortem before your *June 4 @ 9:00am* forecast meeting.\n\n---\n\n*Deal 1: Acme Corporation — $85,000 | AE: Sarah Mitchell*\n• *Original Close Date:* May 31 / *New Projected:* June 30\n• *Root Cause:* Champion disengagement + no exec sponsor confirmed. Critical Event was rep-driven ('end of Q2'), not tied to an external forcing function.\n• *Risk Rep Missed:* Last call was May 12 (19 days before month-end). Buyer hesitation flagged on that call. Rep committed to follow-up materials — never sent. No next meeting scheduled.\n• *Recommended Action:* Sarah to re-engage Lisa Park this week. Require introduction to COO before re-committing to June close. Revisit Critical Event.\n\n---\n\n*Deal 2: Brightwave Technologies — $142,000 | AE: James Okonkwo*\n• *Original Close Date:* May 31 / *New Projected:* June 28\n• *Root Cause:* Economic buyer (CFO) never engaged in the process. Legal backlog used as cover for a deal that was never fully qualified at the financial decision level.\n• *Risk Rep Missed:* SPICED notes listed CFO as signer but no CFO call ever occurred. Scope expanded on May 8 call (5 additional seats) with no pricing discussion — adds uncertainty to close.\n• *Recommended Action:* James to schedule CFO intro call this week. Do not re-commit until CFO has reviewed commercial terms. Clarify scope and reprice if needed.\n\n---\n\n*⚠️ Note: Meridian Health Group ($210,000 | AE: Carla Russo) excluded from slip analysis.*\n_This is a managed push — legal redlines are standard for healthcare procurement. Strong buying intent confirmed on May 28 call with all stakeholders. Expected to close first week of June._\n\n---\n\n*📊 Team-Level Pattern:*\n2 of 2 true slips had no external forcing function in their Critical Event. Both reps used internal deadlines ('end of quarter', 'board wants it') with no buyer-confirmed urgency. This is a *forecasting discipline issue*, not a market signal — worth addressing in the forecast call as a coaching moment on Critical Event qualification.\n\n*Metrics this month:*\n• Slip rate: 16.7% (target <15%) 🔴\n• SPICED gap rate: 100% of true slips had at least 1 gap 🔴\n• Attention coverage: 0% of slipped deals had a call in last 14 days 🔴\n\n📅 *Your next forecast leadership meeting is Tuesday, June 4 @ 9:00am. This report is ready as a standing agenda item.*",
+  "deals": [
+    {
+      "account_name": "Acme Corporation",
+      "ae": "Sarah Mitchell",
+      "arr": 85000,
+      "original_close_date": "2024-05-31",
+      "new_projected_close_date": "2024-06-30",
+      "what_rep_believed": "Deal was commit based on champion (Lisa Park) verbal commitment and Q2 internal deadline.",
+      "what_signals_showed": "Champion disengaged on last call (May 12). Rep never followed up. No exec sponsor. Last activity 19 days before month-end.",
+      "root_cause": "Champion not mobilized — no executive sponsor confirmed, rep-driven Critical Event",
+      "risk_rep_missed": "Buyer hesitation flagged on May 12 call. Internal vendor freeze mentioned. Rep commitments not fulfilled. No next step set.",
+      "recommended_action": "Re-engage Lisa Park. Require COO introduction before re-committing. Redefine Critical Event.",
+      "spiced_gaps": ["No Economic Buyer named", "Critical Event is internal/rep-driven", "No mutual close plan"],
+      "call_flags": ["Last call 19 days before EOM", "Rep commitments not followed up", "Executive disengagement detected"]
+    },
+    {
+      "account_name": "Brightwave Technologies",
+      "ae": "James Okonkwo",
+      "arr": 142000,
+      "original_close_date": "2024-05-31",
+      "new_projected_close_date": "2024-06-28",
+      "what_rep_believed": "Legal review was the only blocker. Deal was otherwise solid.",
+      "what_signals_showed": "CFO (economic buyer) had never been in a call or meeting. Scope expanded on last call. Legal delay is symptom of incomplete qualification.",
+      "root_cause": "No economic buyer access — CFO required to sign but never engaged in sales process",
+      "risk_rep_missed": "SPICED listed CFO as signer but no CFO touchpoint ever occurred. Scope creep on May 8 call not addressed.",
+      "recommended_action": "CFO intro call this week. Do not re-forecast until CFO reviews terms. Reprice expanded scope.",
+      "spiced_gaps": ["Economic buyer listed but never engaged", "No mutual close plan", "Decision criteria incomplete"],
+      "call_flags": ["Last call 23 days before EOM", "Scope creep detected", "CFO never appeared in any call"]
+    }
+  ],
+  "managed_push": [
+    {
+      "account_name": "Meridian Health Group",
+      "ae": "Carla Russo",
+      "arr": 210000,
+      "reason_excluded": "Customer-initiated push with documented legal redlines. All stakeholders engaged. Strong buying intent confirmed.",
+      "expected_close": "First week of June 2024"
+    }
+  ]
+}
