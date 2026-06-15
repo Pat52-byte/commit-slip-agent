@@ -1,0 +1,183 @@
+{
+  "name": "Commit Slip Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 L * *"
+            }
+          ]
+        }
+      },
+      "name": "Cron - Last Day of Month",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 300],
+      "notes": "Runs at 7am on the last day of every month"
+    },
+    {
+      "parameters": {
+        "resource": "opportunity",
+        "operation": "getAll",
+        "filters": {
+          "conditions": [
+            { "field": "Type", "operator": "equals", "value": "New Business" },
+            { "field": "ForecastCategoryName", "operator": "equals", "value": "Commit" },
+            { "field": "IsDeleted", "operator": "equals", "value": false }
+          ]
+        },
+        "options": {
+          "fields": [
+            "Id", "AccountId", "Account.Name", "Owner.Name",
+            "Amount", "CloseDate", "StageName", "ForecastCategoryName",
+            "SPICED_Situation__c", "SPICED_Pain__c", "SPICED_Impact__c",
+            "SPICED_CriticalEvent__c", "SPICED_Decision__c",
+            "Champion__c", "EconomicBuyer__c", "MutualClosePlan__c",
+            "LastActivityDate"
+          ]
+        }
+      },
+      "name": "Salesforce - Get Commit Opps",
+      "type": "n8n-nodes-base.salesforce",
+      "position": [460, 300],
+      "notes": "Pull all New Business Commit deals with CloseDate this month"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter: CloseDate within current month, not Closed Won/Lost\nconst now = new Date();\nconst firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);\nconst lastOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);\n\nconst slipped = items.filter(item => {\n  const opp = item.json;\n  const closeDate = new Date(opp.CloseDate);\n  const isThisMonth = closeDate >= firstOfMonth && closeDate <= lastOfMonth;\n  const isNotClosed = !['Closed Won', 'Closed Lost'].includes(opp.StageName);\n  return isThisMonth && isNotClosed;\n});\n\nreturn slipped.map(item => ({\n  json: {\n    ...item.json,\n    slip_detected: true,\n    snapshot_date: now.toISOString()\n  }\n}));"
+      },
+      "name": "Filter - Identify Slipped Deals",
+      "type": "n8n-nodes-base.function",
+      "position": [680, 300],
+      "notes": "Keep only deals that slipped (not closed by month end)"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ATTENTION_BASE_URL}}/calls",
+        "method": "GET",
+        "qs": {
+          "opportunity_id": "={{$json.Id}}",
+          "account_id": "={{$json.AccountId}}",
+          "limit": 10
+        },
+        "headers": {
+          "Authorization": "Bearer {{$env.ATTENTION_API_KEY}}"
+        }
+      },
+      "name": "Attention - Get Calls per Deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [900, 300],
+      "notes": "Fetch all calls linked to each slipped opportunity"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Analyze call signals and flag risks\nconst opp = $input.first().json;\nconst calls = $input.all().map(i => i.json);\n\nconst today = new Date();\nconst lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);\n\n// Sort calls by date descending\ncalls.sort((a, b) => new Date(b.call_date) - new Date(a.call_date));\nconst lastCall = calls[0];\n\n// Calculate days since last call before month end\nconst lastCallDate = lastCall ? new Date(lastCall.call_date) : null;\nconst daysSinceLastCall = lastCallDate \n  ? Math.floor((lastDayOfMonth - lastCallDate) / (1000 * 60 * 60 * 24))\n  : 999;\n\n// Build SPICED risk flags\nconst spicedFlags = [];\nif (!opp.EconomicBuyer__c) spicedFlags.push('No Economic Buyer identified');\nif (!opp.Champion__c) spicedFlags.push('No Champion identified');\nif (!opp.MutualClosePlan__c) spicedFlags.push('No mutual close plan documented');\nif (opp.SPICED_CriticalEvent__c && opp.SPICED_CriticalEvent__c.toLowerCase().includes('end of quarter')) {\n  spicedFlags.push('Critical Event is vague — end of quarter with no external forcing function');\n}\nif (opp.SPICED_Impact__c && !opp.SPICED_Impact__c.match(/\\$[\\d,]+|\\d+%|\\d+ hours/)) {\n  spicedFlags.push('Impact not tied to a quantified business outcome');\n}\n\n// Build call risk flags\nconst callFlags = [];\nif (daysSinceLastCall > 14) callFlags.push(`Last call was ${daysSinceLastCall} days before month-end`);\nif (lastCall && lastCall.buyer_signals?.hesitation_detected) callFlags.push('Buyer hesitation detected on last call');\nif (lastCall && lastCall.buyer_signals?.executive_disengagement) callFlags.push('Executive disengagement detected');\nif (lastCall && !lastCall.commitments_followed_up) callFlags.push('Rep commitments from last call not followed up');\nif (lastCall && lastCall.buyer_signals?.scope_creep) callFlags.push('Scope creep introduced without pricing resolution');\n\nreturn [{\n  json: {\n    ...opp,\n    calls: calls,\n    last_call_date: lastCallDate ? lastCallDate.toISOString().split('T')[0] : null,\n    days_since_last_call: daysSinceLastCall,\n    spiced_flags: spicedFlags,\n    call_flags: callFlags,\n    call_summaries: calls.map(c => `[${c.call_date}] ${c.transcript_summary}`).join('\\n\\n')\n  }\n}];"
+      },
+      "name": "Analyze - Flag Risk Signals",
+      "type": "n8n-nodes-base.function",
+      "position": [1120, 300],
+      "notes": "Identify SPICED gaps and call risk signals per deal"
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-6",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a RevOps AI analyst specializing in B2B SaaS sales diagnostics. Generate structured post-mortems for slipped forecast deals. Be direct, specific, and actionable. Always cite specific signals from the data. Respond in JSON only."
+            },
+            {
+              "role": "user",
+              "content": "=Analyze this slipped deal and generate a post-mortem in JSON with fields: what_rep_believed, what_signals_showed, root_cause, risk_rep_missed, recommended_action, managed_push_flag, managed_push_reason.\n\nDEAL: {{$json.Account.Name}} | AE: {{$json.Owner.Name}} | ARR: ${{$json.Amount}}\nClose Date: {{$json.CloseDate}} | Stage: {{$json.StageName}}\n\nSPICED NOTES:\nSituation: {{$json.SPICED_Situation__c}}\nPain: {{$json.SPICED_Pain__c}}\nImpact: {{$json.SPICED_Impact__c}}\nCritical Event: {{$json.SPICED_CriticalEvent__c}}\nDecision: {{$json.SPICED_Decision__c}}\nEconomic Buyer: {{$json.EconomicBuyer__c}}\nChampion: {{$json.Champion__c}}\nMutual Close Plan: {{$json.MutualClosePlan__c}}\nLast Activity: {{$json.LastActivityDate}}\n\nSPICED RISK FLAGS: {{$json.spiced_flags}}\n\nCALL DATA:\n{{$json.call_summaries}}\n\nCALL RISK FLAGS: {{$json.call_flags}}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "name": "Claude - Generate Post-Mortem",
+      "type": "n8n-nodes-base.anthropic",
+      "position": [1340, 300],
+      "notes": "AI generates structured post-mortem for each slipped deal"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse Claude response and merge with deal data\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  let postmortem;\n  try {\n    const raw = item.json.text || item.json.content?.[0]?.text || '{}';\n    postmortem = JSON.parse(raw.replace(/```json|```/g, '').trim());\n  } catch (e) {\n    postmortem = { error: 'Failed to parse AI response', raw: item.json };\n  }\n\n  // Exclude managed pushes from main report\n  if (postmortem.managed_push_flag === true) {\n    results.push({ json: { ...item.json, postmortem, is_managed_push: true } });\n  } else {\n    results.push({ json: { ...item.json, postmortem, is_managed_push: false } });\n  }\n}\n\n// Sort by ARR descending\nresults.sort((a, b) => (b.json.Amount || 0) - (a.json.Amount || 0));\n\nreturn results;"
+      },
+      "name": "Parse & Sort Results",
+      "type": "n8n-nodes-base.function",
+      "position": [1560, 300],
+      "notes": "Parse AI output, separate managed pushes, sort by ARR"
+    },
+    {
+      "parameters": {
+        "calendarId": "primary",
+        "timeMin": "={{ new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString() }}",
+        "timeMax": "={{ new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15).toISOString() }}",
+        "query": "forecast leadership"
+      },
+      "name": "Google Calendar - Find Forecast Meeting",
+      "type": "n8n-nodes-base.googleCalendar",
+      "position": [1560, 500],
+      "notes": "Find the first forecast leadership meeting in the new month"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Build the Slack message from all deal post-mortems\nconst deals = $('Parse & Sort Results').all();\nconst calEvent = $('Google Calendar - Find Forecast Meeting').first()?.json;\n\nconst trueSlips = deals.filter(d => !d.json.is_managed_push);\nconst managedPushes = deals.filter(d => d.json.is_managed_push);\n\nconst month = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });\nconst meetingDate = calEvent ? new Date(calEvent.start.dateTime).toLocaleString('en-US', {\n  weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'\n}) : 'TBD — check calendar';\n\nconst totalARR = trueSlips.reduce((sum, d) => sum + (d.json.Amount || 0), 0);\n\n// Build deal blocks\nconst dealBlocks = trueSlips.map((deal, i) => {\n  const d = deal.json;\n  const pm = d.postmortem;\n  return `*Deal ${i+1}: ${d['Account.Name']} — $${d.Amount?.toLocaleString()} | AE: ${d['Owner.Name']}*\n• *Root Cause:* ${pm.root_cause}\n• *Risk Rep Missed:* ${pm.risk_rep_missed}\n• *Recommended Action:* ${pm.recommended_action}`;\n}).join('\\n\\n---\\n\\n');\n\n// Team pattern (simplified)\nconst rootCauses = trueSlips.map(d => d.json.postmortem?.root_cause).filter(Boolean);\nconst pattern = rootCauses.length > 0 \n  ? `${rootCauses.length} of ${trueSlips.length} slips share a common pattern: ${rootCauses[0]}.`\n  : 'No clear team-level pattern this month.';\n\n// Managed push note\nconst managedNote = managedPushes.length > 0\n  ? `\\n⚠️ *${managedPushes.length} deal(s) excluded as managed push:* ${managedPushes.map(d => d.json['Account.Name']).join(', ')}\\n`\n  : '';\n\nconst message = `📋 *Commit Slip Report — ${month}*\n${trueSlips.length} deal(s) committed to close in ${month} did not close. Total ARR at risk: *$${totalARR.toLocaleString()}*\nHere's the post-mortem before your *${meetingDate}* forecast meeting.\n\n---\n\n${dealBlocks}\n\n---\n${managedNote}\n*📊 Team-Level Pattern:*\n${pattern}\n\n📅 *Your next forecast leadership meeting: ${meetingDate}. This is ready as a standing agenda item.*`;\n\nreturn [{ json: { message, deal_count: trueSlips.length, total_arr: totalARR } }];"
+      },
+      "name": "Build Slack Message",
+      "type": "n8n-nodes-base.function",
+      "position": [1780, 400],
+      "notes": "Compose the full Slack DM from all post-mortems"
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_TARGET_USER_ID}}",
+        "text": "={{$json.message}}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "name": "Slack - Send DM to Hassan",
+      "type": "n8n-nodes-base.slack",
+      "position": [2000, 400],
+      "notes": "Send the report as a direct Slack DM on the 1st of the month"
+    }
+  ],
+  "connections": {
+    "Cron - Last Day of Month": {
+      "main": [["Salesforce - Get Commit Opps"]]
+    },
+    "Salesforce - Get Commit Opps": {
+      "main": [["Filter - Identify Slipped Deals"]]
+    },
+    "Filter - Identify Slipped Deals": {
+      "main": [["Attention - Get Calls per Deal"]]
+    },
+    "Attention - Get Calls per Deal": {
+      "main": [["Analyze - Flag Risk Signals"]]
+    },
+    "Analyze - Flag Risk Signals": {
+      "main": [["Claude - Generate Post-Mortem"]]
+    },
+    "Claude - Generate Post-Mortem": {
+      "main": [["Parse & Sort Results"]]
+    },
+    "Parse & Sort Results": {
+      "main": [["Build Slack Message"]]
+    },
+    "Google Calendar - Find Forecast Meeting": {
+      "main": [["Build Slack Message"]]
+    },
+    "Build Slack Message": {
+      "main": [["Slack - Send DM to Hassan"]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
